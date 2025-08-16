@@ -13,7 +13,7 @@ import rpsnumerics
 import numpy as np
 from sklearn.preprocessing import normalize
 import scipy
-
+import cv2
 
 class RPS(object):
     """
@@ -63,22 +63,22 @@ class RPS(object):
         """
         self.L = psutils.load_lightnpy(filename)
 
-    def load_images(self, foldername=None, ext=None):
-        """
-        Load images in the folder specified by the "foldername" that have extension "ext"
-        :param foldername: foldername
-        :param ext: file extension
-        """
-        self.M, self.height, self.width = psutils.load_images(foldername, ext)
+    def load_light_yaml(self, folder_name=None):
+        fs = cv2.FileStorage(folder_name + "LightMatrix.yml", cv2.FILE_STORAGE_READ)
+        fn = fs.getNode("Lights")
+        self.L = fn.mat().T
 
-    def load_npyimages(self, foldername=None):
+    def load_images(self, foldername=None, ext='npy'):
         """
         Load images in the folder specified by the "foldername" in the numpy format
         :param foldername: foldername
         """
-        self.M, self.height, self.width = psutils.load_npyimages(foldername)
+        if ext=='npy':
+            self.M, self.height, self.width = psutils.load_npyimages(foldername)
+        else:
+            self.M, self.height, self.width = psutils.load_images(foldername, ext)
 
-    def load_mask(self, filename=None):
+    def load_mask(self, filename=None, background_is_zero=True):
         """
         Load mask image and set the mask indices
         In the mask image, pixels with zero intensity will be ignored.
@@ -88,6 +88,8 @@ class RPS(object):
         if filename is None:
             raise ValueError("filename is None")
         mask = psutils.load_image(filename=filename)
+        if not background_is_zero:
+            mask = 255 - mask
         self.mask = mask.copy()
         mask = mask.reshape((-1, 1))
         self.foreground_ind = np.where(mask != 0)[0]
