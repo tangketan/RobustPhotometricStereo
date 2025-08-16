@@ -3,13 +3,14 @@ from __future__ import print_function
 import numpy as np
 import time
 from rps import RPS
-import psutil
+import psutils
+# import open3d as o3d
 
 # Choose a method
-METHOD = RPS.L2_SOLVER    # Least-squares
-#METHOD = RPS.L1_SOLVER_MULTICORE    # L1 residual minimization
+# METHOD = RPS.L2_SOLVER    # Least-squares
+# METHOD = RPS.L1_SOLVER_MULTICORE    # L1 residual minimization
 #METHOD = RPS.SBL_SOLVER_MULTICORE    # Sparse Bayesian Learning
-#METHOD = RPS.RPCA_SOLVER    # Robust PCA
+METHOD = RPS.RPCA_SOLVER    # Robust PCA
 
 # Choose a dataset
 #DATA_FOLDERNAME = './data/bunny/bunny_specular/'    # Specular with cast shadow
@@ -33,9 +34,22 @@ print("Photometric stereo: elapsed_time:{0}".format(elapsed_time) + "[sec]")
 rps.save_normalmap(filename="./est_normal")    # Save the estimated normal map
 
 # Evaluate the estimate
-N_gt = psutil.load_normalmap_from_npy(filename=GT_NORMAL_FILENAME)    # read out the ground truth surface normal
+N_gt = psutils.load_normalmap_from_npy(filename=GT_NORMAL_FILENAME)    # read out the ground truth surface normal
 N_gt = np.reshape(N_gt, (rps.height*rps.width, 3))    # reshape as a normal array (p \times 3)
-angular_err = psutil.evaluate_angular_error(N_gt, rps.N, rps.background_ind)    # compute angular error
+angular_err = psutils.evaluate_angular_error(N_gt, rps.N, rps.background_ind)    # compute angular error
 print("Mean angular error [deg]: ", np.mean(angular_err[:]))
-psutil.disp_normalmap(normal=rps.N, height=rps.height, width=rps.width)
+psutils.disp_normalmap(normal=rps.N.copy(), height=rps.height, width=rps.width)
 print("done.")
+
+# 计算出深度图，参考：https://blog.csdn.net/SZU_Kwong/article/details/112757354
+rps.compute_depth()
+rps.save_depthmap(filename="./est_depth")
+psutils.disp_depthmap(depth=rps.depth, mask=rps.mask)
+
+rps.get_mesh("./est_mesh.stl")
+
+# pcd = o3d.geometry.PointCloud()
+# pcd.points = o3d.utility.Vector3dVector(np.array(points))
+# pcd.normals = o3d.utility.Vector3dVector(np.array(normal))
+# o3d.visualization.draw_geometries([pcd], point_show_normal=True)
+# o3d.io.write_point_cloud("./est_pointcloud.pcd", pcd)

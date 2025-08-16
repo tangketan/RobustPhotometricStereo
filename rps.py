@@ -8,10 +8,11 @@ __author__ = "Yasuyuki Matsushita <yasumat@ist.osaka-u.ac.jp>"
 __version__ = "0.1.0"
 __date__ = "11 May 2018"
 
-import psutil
+import psutils
 import rpsnumerics
 import numpy as np
 from sklearn.preprocessing import normalize
+import scipy
 
 
 class RPS(object):
@@ -32,6 +33,7 @@ class RPS(object):
         self.N = None   # surface normal matrix in numpy array
         self.height = None  # image height
         self.width = None   # image width
+        self.mask = None  # mask image (numpy array)
         self.foreground_ind = None    # mask (indices of active pixel locations (rows of M))
         self.background_ind = None    # mask (indices of inactive pixel locations (rows of M))
 
@@ -46,7 +48,7 @@ class RPS(object):
 
         :param filename: filename of lights.txt
         """
-        self.L = psutil.load_lighttxt(filename)
+        self.L = psutils.load_lighttxt(filename)
 
     def load_lightnpy(self, filename=None):
         """
@@ -59,7 +61,7 @@ class RPS(object):
 
         :param filename: filename of lights.npy
         """
-        self.L = psutil.load_lightnpy(filename)
+        self.L = psutils.load_lightnpy(filename)
 
     def load_images(self, foldername=None, ext=None):
         """
@@ -67,14 +69,14 @@ class RPS(object):
         :param foldername: foldername
         :param ext: file extension
         """
-        self.M, self.height, self.width = psutil.load_images(foldername, ext)
+        self.M, self.height, self.width = psutils.load_images(foldername, ext)
 
     def load_npyimages(self, foldername=None):
         """
         Load images in the folder specified by the "foldername" in the numpy format
         :param foldername: foldername
         """
-        self.M, self.height, self.width = psutil.load_npyimages(foldername)
+        self.M, self.height, self.width = psutils.load_npyimages(foldername)
 
     def load_mask(self, filename=None):
         """
@@ -85,7 +87,8 @@ class RPS(object):
         """
         if filename is None:
             raise ValueError("filename is None")
-        mask = psutil.load_image(filename=filename)
+        mask = psutils.load_image(filename=filename)
+        self.mask = mask.copy()
         mask = mask.reshape((-1, 1))
         self.foreground_ind = np.where(mask != 0)[0]
         self.background_ind = np.where(mask == 0)[0]
@@ -95,7 +98,7 @@ class RPS(object):
         Visualize normal map
         :return: None
         """
-        psutil.disp_normalmap(normal=self.N, height=self.height, width=self.width, delay=delay)
+        psutils.disp_normalmap(normal=self.N, height=self.height, width=self.width, delay=delay)
 
     def save_normalmap(self, filename=None):
         """
@@ -103,7 +106,7 @@ class RPS(object):
         :param filename: filename of a normal map
         :return: None
         """
-        psutil.save_normalmap_as_npy(filename=filename, normal=self.N, height=self.height, width=self.width)
+        psutils.save_normalmap_as_npy(filename=filename, normal=self.N, height=self.height, width=self.width)
 
     def solve(self, method=L2_SOLVER):
         if self.M is None:
@@ -300,3 +303,139 @@ class RPS(object):
             self.N = np.zeros((self.M.shape[0], 3))
             for i in range(self.N.shape[1]):
                 self.N[self.foreground_ind, i] = N[:, i]
+
+
+    def compute_depth(self):
+        """
+        计算出深度图
+        原理参考:
+        Mz = v
+        M shape(2*numpixel, numpixel)
+        z shape(numpixel, 1)
+        v shape(2*numpixel, 1)
+        1.http://pages.cs.wisc.edu/~csverma/CS766_09/Stereo/stereo.html
+        2.https://www.zhihu.com/question/388447602/answer/1200616778
+        """
+
+        im_h, im_w = self.mask.shape
+        N = np.reshape(self.N, (self.height, self.width, 3))
+
+        # 得到掩膜图像非零值索引（即物体区域的索引）
+        obj_h, obj_w = np.where(self.mask != 0)
+        # 得到非零元素的数量
+        no_pix = np.size(obj_h)
+        # 构建一个矩阵 里面的元素值是掩膜图像索引的值
+        full2obj = np.zeros((im_h, im_w), np.int32)
+        for idx in range(np.size(obj_h)):
+            full2obj[obj_h[idx], obj_w[idx]] = idx
+
+        # Mz = v
+        M = scipy.sparse.lil_matrix((2*no_pix, no_pix))
+        v = np.zeros((2*no_pix, 1))
+
+        #--------- 填充M和v -----------#
+        # failed_rows = []
+        for idx in range(no_pix):
+            # 获取2D图像上的坐标
+            h = obj_h[idx]
+            w = obj_w[idx]
+            # 获取表面法线
+            n_x = N[h, w, 0]
+            n_y = N[h, w, 1]
+            n_z = N[h, w, 2]
+
+            # z_(x+1, y) - z(x, y) = -nx / nz
+            row_idx = idx * 2
+            if self.mask[h, w+1]:
+                idx_horiz = full2obj[h, w+1]
+                M[row_idx, idx] = -1
+                M[row_idx, idx_horiz] = 1
+                v[row_idx] = -n_x / n_z
+            elif self.mask[h, w-1]:
+                idx_horiz = full2obj[h, w-1]
+                M[row_idx, idx_horiz] = -1
+                M[row_idx, idx] = 1
+                v[row_idx] = -n_x / n_z
+            # else:
+            #     failed_rows.append(row_idx)
+
+            # z_(x, y+1) - z(x, y) = -ny / nz
+            row_idx = idx * 2 + 1
+            if self.mask[h+1, w]:
+                idx_vert = full2obj[h+1, w]
+                M[row_idx, idx] = 1
+                M[row_idx, idx_vert] = -1
+                v[row_idx] = -n_y / n_z
+            elif self.mask[h-1, w]:
+                idx_vert = full2obj[h-1, w]
+                M[row_idx, idx_vert] = 1
+                M[row_idx, idx] = -1
+                v[row_idx] = -n_y / n_z
+            # else:
+            #     failed_rows.append(row_idx)
+
+        # # 将全零的行删除 对于稀疏矩阵M，要先将其恢复成稠密矩阵进行行删除再转为稀疏矩阵
+        # M = M.todense()
+        # M = np.delete(M, failed_rows, 0)
+        # M = scipy.sparse.lil_matrix(M)
+        # v = np.delete(v, failed_rows, 0)
+
+        # 求解线性方程组 Mz = v  <<-->> M.T M z= M.T v
+        MtM = M.T @ M
+        Mtv = M.T @ v
+        z = scipy.sparse.linalg.spsolve(MtM, Mtv)
+
+        std_z = np.std(z, ddof=1)
+        mean_z = np.mean(z)
+        z_zscore = (z - mean_z) / std_z
+
+        # 因奇异值造成的异常
+        outlier_ind = np.abs(z_zscore) > 10
+        z_min = np.min(z[~outlier_ind])
+        z_max = np.max(z[~outlier_ind])
+
+        # 将z填充回正常的2D形状
+        Z = self.mask.astype('float')
+        self.points = []
+        for idx in range(no_pix):
+            # 2D图像中的位置
+            h = obj_h[idx]
+            w = obj_w[idx]
+            Z[h, w] = (z[idx] - z_min) / (z_max - z_min) * 255
+            self.points.append((w, h, Z[h, w]))
+
+        self.depth = Z
+
+
+    def save_depthmap(self, filename=None):
+        """
+        将深度图保存为npy格式
+        :param filename: filename of a depth map
+        :retur: None
+        """
+        psutils.save_depthmap_as_npy(filename=filename, depth=self.depth)
+        psutils.save_depth_and_normal_as_obj(filename=filename+".obj", depth=self.depth, normal=self.N, mask=self.mask)
+
+    def get_mesh(self, filename=None):
+        # compute 3d mesh from point cloud
+        import open3d as o3d
+        from scipy.spatial import Delaunay
+        points = np.array(self.points)  # shape (N, 3)
+        # Use only x, y for triangulation
+        xy = points[:, :2]
+        tri = Delaunay(xy)
+        # Create Open3D mesh
+        mesh = o3d.geometry.TriangleMesh()
+        mesh.vertices = o3d.utility.Vector3dVector(points)
+        mesh.triangles = o3d.utility.Vector3iVector(tri.simplices)
+        # Optionally assign normals if available
+        if hasattr(self, 'N') and self.N is not None:
+            normals = self.N.reshape(self.height, self.width, 3)
+            # Map normals to valid points
+            mesh.vertex_normals = o3d.utility.Vector3dVector([
+                normals[int(p[1]), int(p[0])] for p in points
+            ])
+        mesh.compute_vertex_normals()
+        if filename is not None:
+            o3d.io.write_triangle_mesh(filename, mesh)
+        return mesh

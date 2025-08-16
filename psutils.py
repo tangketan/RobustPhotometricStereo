@@ -1,3 +1,4 @@
+# psutils.py
 import cv2
 import glob
 import numpy as np
@@ -119,8 +120,8 @@ def disp_normalmap(normal=None, height=None, width=None, delay=0, name=None):
         name = 'normal map'
     cv2.imshow(name, N)
     cv2.waitKey(delay)
-    cv2.destroyWindow(name)
-    cv2.waitKey(1)    # to deal with frozen window...
+    # cv2.destroyWindow(name)
+    # cv2.waitKey(1)    # to deal with frozen window...
 
 
 def save_normalmap_as_npy(filename=None, normal=None, height=None, width=None):
@@ -161,3 +162,86 @@ def evaluate_angular_error(gtnormal=None, normal=None, background=None):
         ae[background] = 0
     return ae
 
+def save_depthmap_as_npy(filename=None, depth=None):
+    """
+    将深度图保存为npy
+    :param filename: filename of the depth array
+    :param normal: surface depth array
+    :return: None
+    """
+    if filename is None:
+        raise ValueError("filename is None")
+    np.save(filename, depth)
+
+def save_depthmap_as_obj(filename=None, depth=None):
+    """
+    将深度图保存为obj格式
+    :param filename: filename of the depth array
+    :param depth: surface depth array
+    :return: None
+    """
+    if filename is None:
+        raise ValueError("filename is None")
+    if depth is None:
+        raise ValueError("depth is None")
+
+    with open(filename, 'w') as f:
+        for i in range(depth.shape[0]):
+            for j in range(depth.shape[1]):
+                f.write("v {} {} {}\n".format(i, j, depth[i, j]))
+        f.write("end\n")
+
+def save_depth_and_normal_as_obj(filename=None, depth=None, normal=None, mask=None):
+    """
+    Save depth and normal maps as OBJ format with both vertices and normals.
+    :param filename: output OBJ filename
+    :param depth: (H, W) depth map
+    :param normal: (H, W, 3) normal map
+    :param mask: (H, W) optional mask, only save valid points
+    """
+    if filename is None:
+        raise ValueError("filename is None")
+    if depth is None or normal is None:
+        raise ValueError("depth or normal is None")
+
+    H, W = depth.shape
+    # convert normal to H x W
+    normal_reshaped = normal.reshape((H, W, 3))
+    with open(filename, 'w') as f:
+        # Write vertices and normals
+        for i in range(H):
+            for j in range(W):
+                if mask is not None and mask[i, j] == 0:
+                    continue
+                z = depth[i, j]
+                nx, ny, nz = normal_reshaped[i, j]
+                f.write(f"vn {nx:.7f} {ny:.7f} {nz:.7f}\n")
+                f.write(f"v {j} {i} {z:.7f}\n")
+        # Optionally, faces can be added if mesh connectivity is known
+
+
+def disp_depthmap(depth=None, mask=None, delay=0, name=None):
+    """
+    显示深度图
+    :param depth: array of surface depth
+    :param delay: duration (ms) for visualizing normal map. 0 for displaying infinitely until a key is pressed.
+    :param name: display name
+    :return: None
+    """
+    if depth is None:
+        raise ValueError("Surface depth `depth` is None")
+    if mask is not None:
+        depth = depth * mask
+
+    depth = cv2.normalize(depth, None, 0, 255, cv2.NORM_MINMAX)  # Rescale to [0, 255]
+    depth = np.uint8(depth)
+
+    if name is None:
+        name = 'depth map'
+
+    cv2.imwrite(name + ".png", depth)
+
+    cv2.imshow(name, depth)
+    cv2.waitKey(delay)
+    # cv2.destroyAllWindows()
+    # cv2.waitKey(1)
