@@ -12,7 +12,7 @@ import psutils
 #METHOD = RPS.SBL_SOLVER_MULTICORE    # Sparse Bayesian Learning
 METHOD = RPS.RPCA_SOLVER    # Robust PCA
 
-use_bunny=False
+use_bunny=0
 if use_bunny:
     # Choose a dataset
     #DATA_FOLDERNAME = './data/bunny/bunny_specular/'    # Specular with cast shadow
@@ -33,7 +33,7 @@ if use_bunny:
     rps.load_lightnpy(filename=LIGHT_FILENAME)    # Load light matrix
     rps.load_images(foldername=DATA_FOLDERNAME, ext="npy")    # Load observations
 else:
-    rps.load_mask(filename=MASK_FILENAME, background_is_zero=False)    # Load mask image
+    rps.load_mask(filename=MASK_FILENAME, background_is_zero=True)    # Load mask image
     rps.load_light_yaml(folder_name=DATA_FOLDERNAME)
     rps.load_images(foldername=DATA_FOLDERNAME+"images/", ext="png")
 start = time.time()
