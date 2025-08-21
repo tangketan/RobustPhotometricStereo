@@ -98,10 +98,12 @@ def load_npyimages(foldername=None):
             M = im.reshape((-1, 1))
         else:
             M = np.append(M, im.reshape((-1, 1)), axis=1)
+        # cv2.imshow(fname, im)
+        # cv2.waitKey(0)
     return M, height, width
 
 
-def disp_normalmap(normal=None, height=None, width=None, delay=0, name=None):
+def disp_normalmap(normal=None, height=None, width=None, delay=0, name=None, path=None):
     """
     Visualize normal as a normal map
     :param normal: array of surface normal (p \times 3)
@@ -120,6 +122,8 @@ def disp_normalmap(normal=None, height=None, width=None, delay=0, name=None):
         name = 'normal map'
     cv2.imshow(name, N)
     cv2.waitKey(delay)
+    if path is not None:
+        cv2.imwrite(path+name + ".png", N)
     # cv2.destroyWindow(name)
     # cv2.waitKey(1)    # to deal with frozen window...
 
@@ -220,7 +224,7 @@ def save_depth_and_normal_as_obj(filename=None, depth=None, normal=None, mask=No
         # Optionally, faces can be added if mesh connectivity is known
 
 
-def disp_depthmap(depth=None, mask=None, delay=0, name=None):
+def disp_depthmap(depth=None, mask=None, delay=0, name=None, path=None):
     """
     显示深度图
     :param depth: array of surface depth
@@ -239,7 +243,8 @@ def disp_depthmap(depth=None, mask=None, delay=0, name=None):
     if name is None:
         name = 'depth map'
 
-    cv2.imwrite(name + ".png", depth)
+    if path is not None:
+        cv2.imwrite(path+name + ".png", depth)
 
     cv2.imshow(name, depth)
     cv2.waitKey(delay)

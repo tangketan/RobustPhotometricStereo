@@ -7,31 +7,43 @@ import psutils
 # import open3d as o3d
 
 # Choose a method
-# METHOD = RPS.L2_SOLVER    # Least-squares
-# METHOD = RPS.L1_SOLVER_MULTICORE    # L1 residual minimization
-#METHOD = RPS.SBL_SOLVER_MULTICORE    # Sparse Bayesian Learning
-METHOD = RPS.RPCA_SOLVER    # Robust PCA
+METHOD = RPS.L2_SOLVER    # Least-squares
+# METHOD = RPS.L1_SOLVER   # L1 residual minimization
+# METHOD = RPS.SBL_SOLVER    # Sparse Bayesian Learning
+# METHOD = RPS.RPCA_SOLVER    # Robust PCA
 
-use_bunny=0
-if use_bunny:
+use_bunny=2
+if use_bunny == 1:
     # Choose a dataset
     #DATA_FOLDERNAME = './data/bunny/bunny_specular/'    # Specular with cast shadow
-    DATA_FOLDERNAME = './data/bunny/bunny_lambert/'    # Lambertian diffuse with cast shadow
+    DATA_FOLDERNAME = 'D:/RobustPhotometricStereo/data/bunny/bunny_lambert/'    # Lambertian diffuse with cast shadow
     #DATA_FOLDERNAME = './data/bunny/bunny_lambert_noshadow/'    # Lambertian diffuse without cast shadow
-    LIGHT_FILENAME = './data/bunny/lights.npy'
-    MASK_FILENAME = './data/bunny/mask.png'
-    GT_NORMAL_FILENAME = './data/bunny/gt_normal.npy'
+    LIGHT_FILENAME = 'D:/RobustPhotometricStereo/data/bunny/lights.npy'
+    MASK_FILENAME = 'D:/RobustPhotometricStereo/data/bunny/mask.png'
+    GT_NORMAL_FILENAME = 'D:/RobustPhotometricStereo/data/bunny/gt_normal.npy'
+elif use_bunny == 2:
+    # Choose a dataset
+    #DATA_FOLDERNAME = './data/bunny/bunny_specular/'    # Specular with cast shadow
+    DATA_FOLDERNAME = 'D:/RobustPhotometricStereo/data/blender8/render_output/'    # Lambertian diffuse with cast shadow
+    #DATA_FOLDERNAME = './data/bunny/bunny_lambert_noshadow/'    # Lambertian diffuse without cast shadow
+    LIGHT_FILENAME = 'D:/RobustPhotometricStereo/data/blender8/render_output/lights.npy'
+    MASK_FILENAME = 'D:/RobustPhotometricStereo/data/blender8/render_output/mask.png'
+    GT_NORMAL_FILENAME = None
 else:
-    DATA_FOLDERNAME = './data/render_output/'
+    DATA_FOLDERNAME = 'D:/RobustPhotometricStereo/data/blender7/render_output/'
     MASK_FILENAME = DATA_FOLDERNAME + 'mask.png'
     GT_NORMAL_FILENAME = None#DATA_FOLDERNAME + 'normal_true.png'
 
 # Photometric Stereo
 rps = RPS()
-if use_bunny:
+if use_bunny == 1:
     rps.load_mask(filename=MASK_FILENAME)    # Load mask image
     rps.load_lightnpy(filename=LIGHT_FILENAME)    # Load light matrix
     rps.load_images(foldername=DATA_FOLDERNAME, ext="npy")    # Load observations
+elif use_bunny == 2:
+    rps.load_mask(filename=MASK_FILENAME)    # Load mask image
+    rps.load_lightnpy(filename=LIGHT_FILENAME)    # Load light matrix
+    rps.load_images(foldername=DATA_FOLDERNAME+"images/", ext="npy")    # Load observations
 else:
     rps.load_mask(filename=MASK_FILENAME, background_is_zero=True)    # Load mask image
     rps.load_light_yaml(folder_name=DATA_FOLDERNAME)
@@ -40,7 +52,7 @@ start = time.time()
 rps.solve(METHOD)    # Compute
 elapsed_time = time.time() - start
 print("Photometric stereo: elapsed_time:{0}".format(elapsed_time) + "[sec]")
-rps.save_normalmap(filename="./est_normal")    # Save the estimated normal map
+rps.save_normalmap(filename=DATA_FOLDERNAME+"est_normal")    # Save the estimated normal map
 
 # Evaluate the estimate
 if GT_NORMAL_FILENAME is not None:
@@ -49,14 +61,16 @@ if GT_NORMAL_FILENAME is not None:
     angular_err = psutils.evaluate_angular_error(N_gt, rps.N, rps.background_ind)    # compute angular error
     print("Mean angular error [deg]: ", np.mean(angular_err[:]))
     psutils.disp_normalmap(normal=rps.N.copy(), height=rps.height, width=rps.width)
+psutils.disp_normalmap(normal=rps.N.copy(), height=rps.height, width=rps.width)
 print("done.")
 
 # 计算出深度图，参考：https://blog.csdn.net/SZU_Kwong/article/details/112757354
-rps.compute_depth()
-rps.save_depthmap(filename="./est_depth")
-psutils.disp_depthmap(depth=rps.depth, mask=rps.mask)
+# rps.compute_depth()
+rps.computedepth2()
+rps.save_depthmap(filename=DATA_FOLDERNAME+"est_depth")
+psutils.disp_depthmap(depth=rps.depth, mask=rps.mask, path=DATA_FOLDERNAME)
 
-rps.get_mesh("./est_mesh.stl")
+rps.display3dobj(output_prefix=DATA_FOLDERNAME+"est_mesh")
 
 # pcd = o3d.geometry.PointCloud()
 # pcd.points = o3d.utility.Vector3dVector(np.array(points))
